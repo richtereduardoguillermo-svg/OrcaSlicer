@@ -326,6 +326,7 @@ function run_in_docker() {
 
     container_cli=$(resolve_container_cli)
     runner_image=$(get_docker_runner_image)
+    # Rootless Podman maps host UID to container root (UID 0); use 0:0 so output files match host user
     if [[ "${container_cli}" == "podman" ]] ; then
         host_uid=${HOST_UID:-0}
         host_gid=${HOST_GID:-0}
