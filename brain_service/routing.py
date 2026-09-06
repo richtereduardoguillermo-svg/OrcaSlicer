@@ -157,7 +157,8 @@ def diagnose_cloud_gemini(user_message: str, context: dict, knowledge: str) -> d
         '  "requires_confirmation": true\n'
         "}\n"
         "Las claves de proposed_changes deben ser nombres reales de PrintConfig (ej: cool_plate_temp, hot_plate_temp, nozzle_temperature, filament_retraction_length, brim_width, brim_type, fan_min_speed, close_fan_the_first_x_layers, sparse_infill_density, layer_height).\n"
-        "Prestá especial atención a 'Valores que el usuario ya modificó respecto al preset original': si alguno está fuera de rango razonable para el material/impresora (demasiado alto, demasiado bajo, o inconsistente con el resto), señalalo explícitamente en diagnosis_text aunque el usuario no haya preguntado por eso."
+        "Prestá especial atención a 'Valores que el usuario ya modificó respecto al preset original': si alguno está fuera de rango razonable para el material/impresora (demasiado alto, demasiado bajo, o inconsistente con el resto), señalalo explícitamente en diagnosis_text aunque el usuario no haya preguntado por eso.\n"
+        "IMPORTANTE - tu alcance real: solo podés diagnosticar y proponer valores de parámetros del preset de proceso/filamento/impresora YA seleccionado (vía proposed_changes). NO podés cambiar qué impresora, filamento o perfil está seleccionado, ni abrir archivos, laminar, exportar G-code, ni ninguna otra acción de la interfaz. Si el mensaje del usuario pide algo de eso (ej. 'cambiá a la Ender 3', 'abrí este archivo', 'laminá la pieza'), NO lo ignores ni respondas con un diagnóstico genérico del preset actual: en diagnosis_text aclará que no podés hacer esa acción vos y decile en una frase corta dónde hacerlo manualmente (ej. el selector de impresora/filamento/perfil en la barra lateral izquierda), y dejá proposed_changes vacío ({})."
     )
 
     prompt = (
