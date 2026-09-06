@@ -99,6 +99,7 @@ AICopilotPanel::~AICopilotPanel()
     if (m_current_request) {
         m_current_request->cancel();
     }
+    delete m_progress_timer;
 }
 
 void AICopilotPanel::create_widgets()
@@ -140,6 +141,14 @@ void AICopilotPanel::create_widgets()
     m_diff_panel->Hide();
 
     main_sizer->Add(m_diff_panel, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
+
+    // Progress gauge (indeterminate, shown only while waiting for the brain_service)
+    m_progress_gauge = new wxGauge(this, wxID_ANY, 100, wxDefaultPosition, wxSize(-1, FromDIP(6)), wxGA_HORIZONTAL | wxGA_SMOOTH);
+    m_progress_gauge->Hide();
+    main_sizer->Add(m_progress_gauge, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(4));
+
+    m_progress_timer = new wxTimer(this, wxID_ANY);
+    Bind(wxEVT_TIMER, &AICopilotPanel::on_progress_timer, this, m_progress_timer->GetId());
 
     // Input row: text box + Ask button
     auto* input_sizer = new wxBoxSizer(wxHORIZONTAL);
@@ -406,10 +415,43 @@ void AICopilotPanel::on_enter_pressed(wxCommandEvent& evt)
     on_ask_button(evt);
 }
 
+void AICopilotPanel::on_progress_timer(wxTimerEvent& evt)
+{
+    if (m_progress_gauge)
+        m_progress_gauge->Pulse();
+}
+
+void AICopilotPanel::start_thinking()
+{
+    if (m_btn_ask) {
+        m_btn_ask->Disable();
+        m_btn_ask->SetLabel(_L("Pensando..."));
+    }
+    if (m_progress_gauge) {
+        m_progress_gauge->Show();
+        Layout();
+    }
+    if (m_progress_timer)
+        m_progress_timer->Start(80);
+}
+
+void AICopilotPanel::stop_thinking()
+{
+    if (m_progress_timer)
+        m_progress_timer->Stop();
+    if (m_progress_gauge) {
+        m_progress_gauge->Hide();
+        Layout();
+    }
+    if (m_btn_ask) {
+        m_btn_ask->Enable();
+        m_btn_ask->SetLabel(_L("Preguntar"));
+    }
+}
+
 void AICopilotPanel::send_query_to_brain(const wxString& text)
 {
-    if (m_btn_ask)
-        m_btn_ask->Disable();
+    start_thinking();
 
     nlohmann::json payload;
     payload["user_message"] = text.ToUTF8().data();
@@ -486,7 +528,7 @@ void AICopilotPanel::send_query_to_brain(const wxString& text)
         .on_complete([this, alive = m_alive](std::string body, unsigned http_status) {
             wxGetApp().CallAfter([this, alive, body, http_status]() {
                 if (!*alive) return;
-                if (m_btn_ask) m_btn_ask->Enable();
+                stop_thinking();
                 try {
                     auto j = nlohmann::json::parse(body);
                     std::string diag = j.value("diagnosis_text", "");
@@ -536,7 +578,7 @@ void AICopilotPanel::send_query_to_brain(const wxString& text)
         .on_error([this, alive = m_alive](std::string body, std::string error, unsigned http_status) {
             wxGetApp().CallAfter([this, alive, error, http_status]() {
                 if (!*alive) return;
-                if (m_btn_ask) m_btn_ask->Enable();
+                stop_thinking();
                 wxString err_msg = _L("Error al consultar el brain_service (") +
                                    wxString::FromUTF8(error.c_str()) +
                                    ", código " + wxString::Format("%u", http_status) + ")";

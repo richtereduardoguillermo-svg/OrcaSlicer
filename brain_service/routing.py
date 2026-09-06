@@ -9,6 +9,8 @@ import logging
 import subprocess
 from pathlib import Path
 
+import local_model
+
 KNOWLEDGE_DIR = Path(__file__).resolve().parent / "knowledge"
 
 KEYWORD_TOPICS = {
@@ -197,19 +199,26 @@ def route_query(user_message: str, context: dict = None) -> dict:
     context = context or {}
     knowledge = load_relevant_knowledge(user_message, context.get("validation_warnings"))
 
-    # 1. Intento local
+    # 1. Reglas locales instantáneas (casos típicos ya conocidos)
     local_res = diagnose_local(user_message, context)
     if local_res:
-        logging.info("Diagnóstico resuelto LOCALMENTE.")
+        logging.info("Diagnóstico resuelto por REGLAS LOCALES (instantáneo).")
         return local_res
 
-    # 2. Intento Gemini Cloud
+    # 2. LLM local (Qwen3-4B vía llama-server/Vulkan) — reemplaza a Gemini en la
+    #    mayoría de los casos: mismo criterio, sin depender de la red ni de agy.
+    llm_res = local_model.diagnose(user_message, context, knowledge)
+    if llm_res:
+        logging.info("Diagnóstico resuelto por LLM LOCAL (Qwen3-4B).")
+        return llm_res
+
+    # 3. Gemini Cloud, solo si el LLM local no está disponible o falló
     cloud_res = diagnose_cloud_gemini(user_message, context, knowledge)
     if cloud_res:
-        logging.info("Diagnóstico resuelto por GEMINI (Cloud).")
+        logging.info("Diagnóstico resuelto por GEMINI (Cloud) — fallback tras fallo del LLM local.")
         return cloud_res
 
-    # 3. Fallback genérico
+    # 4. Fallback genérico
     return {
         "diagnosis_text": f"Recibí tu consulta: '{user_message}'. No se detectaron fallas críticas en los parámetros activos.",
         "proposed_changes": {},

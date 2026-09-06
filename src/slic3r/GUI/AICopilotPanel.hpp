@@ -5,6 +5,8 @@
 #include <wx/button.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
+#include <wx/gauge.h>
+#include <wx/timer.h>
 #include <memory>
 #include <map>
 #include <string>
@@ -42,10 +44,15 @@ private:
     void on_apply_button(wxCommandEvent& evt);
     void on_discard_button(wxCommandEvent& evt);
     void send_query_to_brain(const wxString& text);
+    void on_progress_timer(wxTimerEvent& evt);
+    void start_thinking();
+    void stop_thinking();
 
     wxTextCtrl*         m_chat_log{nullptr};
     wxTextCtrl*         m_input_text{nullptr};
     wxButton*           m_btn_ask{nullptr};
+    wxGauge*            m_progress_gauge{nullptr};
+    wxTimer*            m_progress_timer{nullptr};
 
     // Diff UI
     wxPanel*            m_diff_panel{nullptr};
