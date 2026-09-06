@@ -1,6 +1,8 @@
 #include "AICopilotPanel.hpp"
 #include "I18N.hpp"
 #include "GUI_App.hpp"
+#include "../Utils/Http.hpp"
+#include <nlohmann/json.hpp>
 
 namespace Slic3r {
 namespace GUI {
@@ -10,9 +12,20 @@ AICopilotPanel::AICopilotPanel(wxWindow* parent,
                                const wxPoint& pos,
                                const wxSize& size,
                                long style)
-    : wxPanel(parent, id, pos, size, style)
+    : wxPanel(parent, id, pos, size, style),
+      m_alive(std::make_shared<bool>(true))
 {
     create_widgets();
+}
+
+AICopilotPanel::~AICopilotPanel()
+{
+    if (m_alive) {
+        *m_alive = false;
+    }
+    if (m_current_request) {
+        m_current_request->cancel();
+    }
 }
 
 void AICopilotPanel::create_widgets()
@@ -52,7 +65,7 @@ void AICopilotPanel::create_widgets()
 
     wxGetApp().UpdateDarkUI(this);
 
-    // Initial greeting in skeleton mode
+    // Initial greeting
     append_message("Copiloto", _L("Hola Eduardo. Estoy listo para ayudarte a calibrar y optimizar tus impresiones."));
 }
 
@@ -80,13 +93,58 @@ void AICopilotPanel::on_ask_button(wxCommandEvent& evt)
     append_message("Eduardo", text);
     m_input_text->Clear();
 
-    // Skeleton placeholder response
-    append_message("Copiloto", _L("(Modo esqueleto) Recibí tu consulta: ") + text);
+    send_query_to_brain(text);
 }
 
 void AICopilotPanel::on_enter_pressed(wxCommandEvent& evt)
 {
     on_ask_button(evt);
+}
+
+void AICopilotPanel::send_query_to_brain(const wxString& text)
+{
+    if (m_btn_ask)
+        m_btn_ask->Disable();
+
+    nlohmann::json payload;
+    payload["user_message"] = text.ToUTF8().data();
+    std::string post_body = payload.dump();
+
+    if (m_current_request) {
+        m_current_request->cancel();
+        m_current_request.reset();
+    }
+
+    auto http = Slic3r::Http::post("http://127.0.0.1:8787/echo");
+    m_current_request = http.header("Content-Type", "application/json")
+        .set_post_body(post_body)
+        .timeout_connect(3)
+        .timeout_max(10)
+        .on_complete([this, alive = m_alive](std::string body, unsigned http_status) {
+            wxGetApp().CallAfter([this, alive, body, http_status]() {
+                if (!*alive) return;
+                if (m_btn_ask) m_btn_ask->Enable();
+                try {
+                    auto j = nlohmann::json::parse(body);
+                    std::string reply = j.value("reply", "");
+                    if (reply.empty())
+                        reply = body;
+                    append_message("Copiloto", wxString::FromUTF8(reply.c_str()));
+                } catch (...) {
+                    append_message("Copiloto", wxString::FromUTF8(body.c_str()));
+                }
+            });
+        })
+        .on_error([this, alive = m_alive](std::string body, std::string error, unsigned http_status) {
+            wxGetApp().CallAfter([this, alive, error, http_status]() {
+                if (!*alive) return;
+                if (m_btn_ask) m_btn_ask->Enable();
+                wxString err_msg = wxString::Format(_L("Error conectando con brain_service (%s, código %u)"),
+                                                    wxString::FromUTF8(error.c_str()), http_status);
+                append_message("Copiloto", err_msg);
+            });
+        })
+        .perform();
 }
 
 } // namespace GUI
