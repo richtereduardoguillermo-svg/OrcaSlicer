@@ -326,9 +326,15 @@ function run_in_docker() {
 
     container_cli=$(resolve_container_cli)
     runner_image=$(get_docker_runner_image)
-    host_uid=$(id -u)
-    host_gid=$(id -g)
-    host_user="${USER:-orca}"
+    if [[ "${container_cli}" == "podman" ]] ; then
+        host_uid=${HOST_UID:-0}
+        host_gid=${HOST_GID:-0}
+        host_user=${HOST_USER:-root}
+    else
+        host_uid=${HOST_UID:-$(id -u)}
+        host_gid=${HOST_GID:-$(id -g)}
+        host_user=${HOST_USER:-${USER:-orca}}
+    fi
     container_workspace="/__w/OrcaSlicer/OrcaSlicer"
     build_args=()
     for item in "${FORWARDED_ARGS[@]}" ; do
