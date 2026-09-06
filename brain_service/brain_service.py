@@ -8,6 +8,7 @@ import sys
 import json
 import logging
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from routing import route_query
 
 HOST = "127.0.0.1"
 PORT = 8787
@@ -66,21 +67,23 @@ class BrainRequestHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/diagnose":
             user_message = payload.get("user_message", "")
-            logging.info(f"[/diagnose] Consulta: '{user_message}'")
-            # Respuesta básica estructurada para diagnóstico
-            self._send_json_response(200, {
+            logging.info(f"[/diagnose] Consulta recibida: '{user_message}'")
+            result = route_query(user_message, payload)
+            # Asegurar contrato
+            response_data = {
                 "status": "ok",
-                "reply": f"Diagnóstico preliminar para: {user_message}",
-                "diagnosis": "OK",
-                "recommended_changes": {}
-            })
+                "diagnosis_text": result.get("diagnosis_text", ""),
+                "proposed_changes": result.get("proposed_changes", {}),
+                "confidence": result.get("confidence", "local"),
+                "requires_confirmation": result.get("requires_confirmation", True)
+            }
+            self._send_json_response(200, response_data)
             return
 
         else:
             self._send_json_response(404, {"error": "Endpoint not found", "path": self.path})
 
     def log_message(self, format, *args):
-        # Redirigir logging al logger estándar
         logging.info("%s - - [%s] %s" % (self.client_address[0], self.log_date_time_string(), format % args))
 
 

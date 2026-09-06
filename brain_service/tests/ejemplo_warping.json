@@ -1,0 +1,9 @@
+{
+  "user_message": "por qué me hace warping en este PETG",
+  "printer_preset": "Bambu Lab A1 0.4 nozzle",
+  "filament_preset": "Generic PETG @BBL A1",
+  "process_preset": "0.20mm Standard @BBL A1",
+  "config_diff_from_system": { "nozzle_temperature": [240] },
+  "validation_warnings": [],
+  "print_statistics": { "estimated_normal_print_time": "2h34m", "total_used_filament": 12.3 }
+}

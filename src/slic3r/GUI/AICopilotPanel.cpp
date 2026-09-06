@@ -1,7 +1,11 @@
 #include "AICopilotPanel.hpp"
 #include "I18N.hpp"
 #include "GUI_App.hpp"
+#include "Plater.hpp"
 #include "../Utils/Http.hpp"
+#include "libslic3r/Print.hpp"
+#include "libslic3r/PrintBase.hpp"
+#include "libslic3r/PresetBundle.hpp"
 #include <nlohmann/json.hpp>
 
 namespace Slic3r {
@@ -108,6 +112,64 @@ void AICopilotPanel::send_query_to_brain(const wxString& text)
 
     nlohmann::json payload;
     payload["user_message"] = text.ToUTF8().data();
+
+    // Context from Presets
+    auto* preset_bundle = wxGetApp().preset_bundle;
+    if (preset_bundle) {
+        payload["printer_preset"] = preset_bundle->printers.get_selected_preset().name;
+        payload["filament_preset"] = preset_bundle->filaments.get_selected_preset().name;
+        payload["process_preset"] = preset_bundle->prints.get_selected_preset().name;
+
+        nlohmann::json diff_json = nlohmann::json::object();
+        for (const auto& key : preset_bundle->prints.current_dirty_options()) {
+            if (preset_bundle->prints.get_edited_preset().config.has(key)) {
+                diff_json[key] = preset_bundle->prints.get_edited_preset().config.opt_serialize(key);
+            }
+        }
+        for (const auto& key : preset_bundle->filaments.current_dirty_options()) {
+            if (preset_bundle->filaments.get_edited_preset().config.has(key)) {
+                diff_json[key] = preset_bundle->filaments.get_edited_preset().config.opt_serialize(key);
+            }
+        }
+        payload["config_diff_from_system"] = diff_json;
+    }
+
+    // Context from Plater and Print
+    auto* plater = wxGetApp().plater();
+    nlohmann::json warnings_json = nlohmann::json::array();
+    nlohmann::json stats_json = nlohmann::json::object();
+
+    if (plater) {
+        try {
+            std::vector<StringObjectException> warnings;
+            StringObjectException err = plater->fff_print().validate(&warnings);
+            if (!err.string.empty()) {
+                warnings_json.push_back({
+                    {"type", static_cast<int>(err.type)},
+                    {"message", err.string},
+                    {"opt_key", err.opt_key}
+                });
+            }
+            for (const auto& w : warnings) {
+                warnings_json.push_back({
+                    {"type", static_cast<int>(w.type)},
+                    {"message", w.string},
+                    {"opt_key", w.opt_key}
+                });
+            }
+
+            const auto& stats = plater->fff_print().print_statistics();
+            stats_json["estimated_normal_print_time"] = stats.estimated_normal_print_time;
+            stats_json["total_used_filament"] = stats.total_used_filament;
+            stats_json["total_weight"] = stats.total_weight;
+            stats_json["total_cost"] = stats.total_cost;
+        } catch (...) {
+            // Guard against uninitialized print
+        }
+    }
+    payload["validation_warnings"] = warnings_json;
+    payload["print_statistics"] = stats_json;
+
     std::string post_body = payload.dump();
 
     if (m_current_request) {
@@ -115,21 +177,39 @@ void AICopilotPanel::send_query_to_brain(const wxString& text)
         m_current_request.reset();
     }
 
-    auto http = Slic3r::Http::post("http://127.0.0.1:8787/echo");
+    auto http = Slic3r::Http::post("http://127.0.0.1:8787/diagnose");
     m_current_request = http.header("Content-Type", "application/json")
         .set_post_body(post_body)
-        .timeout_connect(3)
-        .timeout_max(10)
+        .timeout_connect(5)
+        .timeout_max(40)
         .on_complete([this, alive = m_alive](std::string body, unsigned http_status) {
             wxGetApp().CallAfter([this, alive, body, http_status]() {
                 if (!*alive) return;
                 if (m_btn_ask) m_btn_ask->Enable();
                 try {
                     auto j = nlohmann::json::parse(body);
-                    std::string reply = j.value("reply", "");
-                    if (reply.empty())
-                        reply = body;
-                    append_message("Copiloto", wxString::FromUTF8(reply.c_str()));
+                    std::string diag = j.value("diagnosis_text", "");
+                    std::string conf = j.value("confidence", "");
+                    if (diag.empty())
+                        diag = j.value("reply", body);
+
+                    wxString sender = "Copiloto";
+                    if (conf == "cloud") {
+                        sender = "Copiloto (Gemini Cloud)";
+                    } else if (conf == "local") {
+                        sender = "Copiloto (Local)";
+                    }
+
+                    wxString full_msg = wxString::FromUTF8(diag.c_str());
+
+                    if (j.contains("proposed_changes") && j["proposed_changes"].is_object() && !j["proposed_changes"].empty()) {
+                        full_msg += "\n\nParámetros sugeridos:";
+                        for (auto& item : j["proposed_changes"].items()) {
+                            full_msg += "\n • " + wxString::FromUTF8(item.key().c_str()) + ": " + wxString::FromUTF8(item.value().dump().c_str());
+                        }
+                    }
+
+                    append_message(sender, full_msg);
                 } catch (...) {
                     append_message("Copiloto", wxString::FromUTF8(body.c_str()));
                 }
@@ -139,8 +219,9 @@ void AICopilotPanel::send_query_to_brain(const wxString& text)
             wxGetApp().CallAfter([this, alive, error, http_status]() {
                 if (!*alive) return;
                 if (m_btn_ask) m_btn_ask->Enable();
-                wxString err_msg = wxString::Format(_L("Error conectando con brain_service (%s, código %u)"),
-                                                    wxString::FromUTF8(error.c_str()), http_status);
+                wxString err_msg = _L("Error al consultar el brain_service (") +
+                                   wxString::FromUTF8(error.c_str()) +
+                                   wxString::Format(", código %u)", http_status);
                 append_message("Copiloto", err_msg);
             });
         })
