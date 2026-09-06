@@ -67,11 +67,11 @@ def diagnose_local(user_message: str, context: dict) -> dict:
     if any(k in msg_lower for k in ["warp", "alabe", "despeg", "levant", "esquinas"]):
         if is_petg:
             return {
-                "diagnosis_text": "El warping en PETG ocurre por enfriamiento prematuro y falta de área de contacto en la placa. Se recomienda elevar la cama inicial a 75°C, desactivar el ventilador durante las 4 primeras capas y activar orejas o borde perimetral (brim).",
+                "diagnosis_text": "El warping en PETG ocurre por enfriamiento prematuro y falta de área de contacto en la placa. Se recomienda elevar la temperatura de cama a 75°C, desactivar el ventilador durante las 4 primeras capas y activar borde exterior (brim).",
                 "proposed_changes": {
-                    "bed_temperature_initial_layer": 75,
-                    "disable_fan_first_layers": 4,
-                    "brim_type": 2,
+                    "hot_plate_temp": 75,
+                    "close_fan_the_first_x_layers": 4,
+                    "brim_type": "outer_only",
                     "brim_width": 5.0
                 },
                 "confidence": "local",
@@ -79,11 +79,11 @@ def diagnose_local(user_message: str, context: dict) -> dict:
             }
         elif is_abs:
             return {
-                "diagnosis_text": "El ABS/ASA sufre una fuerte contracción térmica. Es indispensable mantener la cama a 100°C+, apagar ventilador de capa y usar borde exterior.",
+                "diagnosis_text": "El ABS/ASA sufre una fuerte contracción térmica. Es indispensable mantener la cama a 100°C+, retrasar el encendido del ventilador de capa y usar borde exterior.",
                 "proposed_changes": {
-                    "bed_temperature_initial_layer": 100,
-                    "disable_fan_first_layers": 5,
-                    "brim_type": 2,
+                    "hot_plate_temp": 100,
+                    "close_fan_the_first_x_layers": 5,
+                    "brim_type": "outer_only",
                     "brim_width": 8.0
                 },
                 "confidence": "local",
@@ -91,11 +91,11 @@ def diagnose_local(user_message: str, context: dict) -> dict:
             }
         else: # PLA u otro
             return {
-                "diagnosis_text": "Para evitar despegue en las esquinas, aumentá 5°C la temperatura de primera capa en la cama, retrasá el encendido del ventilador y agregá un brim de 5mm.",
+                "diagnosis_text": "Para evitar despegue en las esquinas, aumentá la temperatura de la placa a 45°C, retrasá el encendido del ventilador y agregá un brim de 5mm.",
                 "proposed_changes": {
-                    "bed_temperature_initial_layer": 65,
-                    "disable_fan_first_layers": 3,
-                    "brim_type": 2,
+                    "cool_plate_temp": 45,
+                    "close_fan_the_first_x_layers": 3,
+                    "brim_type": "outer_only",
                     "brim_width": 5.0
                 },
                 "confidence": "local",
@@ -105,10 +105,10 @@ def diagnose_local(user_message: str, context: dict) -> dict:
     # Caso 2: Stringing / Hilos
     if any(k in msg_lower for k in ["string", "hilo", "telara", "pelos"]):
         return {
-            "diagnosis_text": "Los hilos de material indican retracción insuficiente o temperatura excesiva de extrusión. Ajustamos longitud de retracción y aumentamos la velocidad de traslados libres.",
+            "diagnosis_text": "Los hilos de material indican retracción insuficiente o velocidad inadecuada de traslados. Ajustamos retracción y aumentamos velocidad de traslados libres.",
             "proposed_changes": {
-                "retraction_length": 1.2,
-                "retraction_speed": 40.0,
+                "filament_retraction_length": 1.2,
+                "filament_retraction_speed": 40.0,
                 "travel_speed": 200
             },
             "confidence": "local",
@@ -118,10 +118,10 @@ def diagnose_local(user_message: str, context: dict) -> dict:
     # Caso 3: Delaminación / Capas débiles
     if any(k in msg_lower for k in ["adhes", "capa", "delamin", "separ", "fragil", "rompe"]):
         return {
-            "diagnosis_text": "La separación entre capas se debe a una fusión térmica insuficiente. Se recomienda elevar la temperatura de boquilla y moderar la velocidad del ventilador.",
+            "diagnosis_text": "La separación entre capas se debe a un enfriamiento excesivo del flujo. Se recomienda moderar la velocidad del ventilador de capa.",
             "proposed_changes": {
-                "fan_max_speed": 40.0,
-                "fan_min_speed": 20.0
+                "fan_max_speed": 40,
+                "fan_min_speed": 20
             },
             "confidence": "local",
             "requires_confirmation": True
@@ -154,7 +154,7 @@ def diagnose_cloud_gemini(user_message: str, context: dict, knowledge: str) -> d
         '  "confidence": "cloud",\n'
         '  "requires_confirmation": true\n'
         "}\n"
-        "Las claves de proposed_changes deben ser nombres reales de PrintConfig (ej: bed_temperature, nozzle_temperature, retraction_length, brim_width, brim_type, fan_min_speed, disable_fan_first_layers)."
+        "Las claves de proposed_changes deben ser nombres reales de PrintConfig (ej: cool_plate_temp, hot_plate_temp, nozzle_temperature, filament_retraction_length, brim_width, brim_type, fan_min_speed, close_fan_the_first_x_layers, sparse_infill_density, layer_height)."
     )
 
     prompt = (
