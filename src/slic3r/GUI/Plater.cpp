@@ -128,6 +128,7 @@
 #include "SyncAmsInfoDialog.hpp"
 #include "../Utils/ASCIIFolding.hpp"
 #include "../Utils/UndoRedo.hpp"
+#include "AICopilotPanel.hpp"
 #include "../Utils/PresetUpdater.hpp"
 #include "../Utils/Process.hpp"
 #include "RemovableDriveManager.hpp"
@@ -776,6 +777,10 @@ struct Sidebar::priv
     ScalableButton* m_printer_setting = nullptr;
     wxStaticText *  m_text_printer_settings = nullptr;
     wxPanel* m_panel_printer_content = nullptr;
+    // AI Copilot
+    StaticBox*      m_panel_ai_title = nullptr;
+    wxPanel*        m_panel_ai_separator = nullptr;
+    AICopilotPanel* m_panel_ai_content = nullptr;
     // Filament Track Switch status overlay: an icon floated over the left/single extruder AMS area,
     // shown only when the switch is installed (green when ready, red when not calibrated).
     wxStaticBitmap* extruder_separator_icon = nullptr;
@@ -2889,6 +2894,44 @@ Sidebar::Sidebar(Plater *parent)
         p->m_panel_printer_content->SetSizer(p->vsizer_printer);
         p->m_panel_printer_content->Layout();
         scrolled_sizer->Add(p->m_panel_printer_content, 0, wxEXPAND, 0);
+    }
+
+    // AI Copilot section
+    {
+        p->m_panel_ai_title = new StaticBox(p->scrolled, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL | wxBORDER_NONE);
+        p->m_panel_ai_title->SetBackgroundColor(title_bg);
+        p->m_panel_ai_title->SetBackgroundColor2(0xF1F1F1);
+
+        auto* ai_icon = new ScalableButton(p->m_panel_ai_title, wxID_ANY, "OrcaSlicer");
+        auto* text_ai_title = new Label(p->m_panel_ai_title, _L("AI Copilot"), LB_PROPAGATE_MOUSE_EVENT | wxST_ELLIPSIZE_END);
+
+        auto* h_sizer_ai_title = new wxBoxSizer(wxHORIZONTAL);
+        h_sizer_ai_title->Add(ai_icon, 0, wxALIGN_CENTRE | wxLEFT, FromDIP(SidebarProps::TitlebarMargin()));
+        h_sizer_ai_title->AddSpacer(FromDIP(SidebarProps::ElementSpacing()));
+        h_sizer_ai_title->Add(text_ai_title, 1, wxALIGN_CENTER | wxRIGHT, FromDIP(SidebarProps::WideSpacing()));
+        h_sizer_ai_title->SetMinSize(-1, 3 * em);
+
+        p->m_panel_ai_title->SetSizer(h_sizer_ai_title);
+        p->m_panel_ai_title->Layout();
+
+        scrolled_sizer->Add(p->m_panel_ai_title, 0, wxEXPAND | wxALL, 0);
+
+        p->m_panel_ai_title->Bind(wxEVT_LEFT_UP, [this](auto& e) {
+            if (!p || !p->m_panel_ai_content || !m_scrolled_sizer)
+                return;
+            bool isShown = p->m_panel_ai_content->IsShown();
+            p->m_panel_ai_content->Show(!isShown);
+            p->m_panel_ai_separator->Show(isShown);
+            m_scrolled_sizer->Layout();
+        });
+
+        p->m_panel_ai_separator = new wxPanel(p->scrolled, wxID_ANY, wxDefaultPosition, wxSize(-1, FromDIP(2)));
+        p->m_panel_ai_separator->SetBackgroundColour("#FFFFFF");
+        p->m_panel_ai_separator->Hide();
+        scrolled_sizer->Add(p->m_panel_ai_separator, 0, wxEXPAND);
+
+        p->m_panel_ai_content = new AICopilotPanel(p->scrolled);
+        scrolled_sizer->Add(p->m_panel_ai_content, 0, wxEXPAND, 0);
     }
 
     {

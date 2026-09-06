@@ -4,6 +4,8 @@ project(libslic3r_gui)
 include(PrecompiledHeader)
 
 set(SLIC3R_GUI_SOURCES
+    GUI/AICopilotPanel.hpp
+    GUI/AICopilotPanel.cpp
     GUI/Widgets/AnimaController.hpp
     GUI/Widgets/AnimaController.cpp
     Config/Snapshot.cpp
