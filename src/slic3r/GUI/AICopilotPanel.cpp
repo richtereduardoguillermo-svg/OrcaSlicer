@@ -214,6 +214,33 @@ void AICopilotPanel::show_proposed_diff(const std::map<std::string, std::string>
 
     auto* bundle = wxGetApp().preset_bundle;
 
+    // Nunca proponer una velocidad de desplazamiento que la máquina no puede ejecutar
+    // físicamente, aunque la IA (local o cloud) la haya sugerido igual.
+    if (bundle) {
+        auto it = m_pending_changes.find("travel_speed");
+        if (it != m_pending_changes.end()) {
+            const auto& printer_config = bundle->printers.get_selected_preset().config;
+            if (printer_config.has("machine_max_speed_x") && printer_config.has("machine_max_speed_y")) {
+                double max_x = printer_config.opt_float("machine_max_speed_x", 0);
+                double max_y = printer_config.opt_float("machine_max_speed_y", 0);
+                double machine_limit = (max_x < max_y) ? max_x : max_y;
+                double proposed_val = 0.0;
+                try { proposed_val = std::stod(it->second); } catch (...) {}
+                if (machine_limit > 0 && proposed_val > machine_limit) {
+                    std::ostringstream limit_ss;
+                    limit_ss << machine_limit;
+                    append_message("Copiloto",
+                        _L("Aviso: la velocidad de desplazamiento propuesta (") +
+                        wxString::FromUTF8(it->second.c_str()) +
+                        _L(" mm/s) supera el límite físico de esta máquina (") +
+                        wxString::FromUTF8(limit_ss.str().c_str()) +
+                        _L(" mm/s). Se ajustó automáticamente al límite real."));
+                    it->second = limit_ss.str();
+                }
+            }
+        }
+    }
+
     for (const auto& kv : m_pending_changes) {
         const std::string& key = kv.first;
         const std::string& proposed = kv.second;
@@ -475,6 +502,23 @@ void AICopilotPanel::send_query_to_brain(const wxString& text)
             }
         }
         payload["config_diff_from_system"] = diff_json;
+
+        // Límites físicos reales de la impresora/filamento activos, para que la IA
+        // nunca proponga una velocidad que la máquina no puede ejecutar.
+        nlohmann::json limits_json = nlohmann::json::object();
+        const auto& printer_config = preset_bundle->printers.get_selected_preset().config;
+        for (const char* key : {"machine_max_speed_x", "machine_max_speed_y",
+                                 "machine_max_speed_z", "machine_max_speed_e"}) {
+            if (printer_config.has(key)) {
+                limits_json[key] = printer_config.opt_serialize(key);
+            }
+        }
+        const auto& filament_config = preset_bundle->filaments.get_selected_preset().config;
+        if (filament_config.has("filament_max_volumetric_speed")) {
+            limits_json["filament_max_volumetric_speed"] =
+                filament_config.opt_serialize("filament_max_volumetric_speed");
+        }
+        payload["machine_speed_limits"] = limits_json;
     }
 
     // Context from Plater and Print
