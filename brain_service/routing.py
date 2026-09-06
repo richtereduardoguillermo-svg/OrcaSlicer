@@ -156,7 +156,8 @@ def diagnose_cloud_gemini(user_message: str, context: dict, knowledge: str) -> d
         '  "confidence": "cloud",\n'
         '  "requires_confirmation": true\n'
         "}\n"
-        "Las claves de proposed_changes deben ser nombres reales de PrintConfig (ej: cool_plate_temp, hot_plate_temp, nozzle_temperature, filament_retraction_length, brim_width, brim_type, fan_min_speed, close_fan_the_first_x_layers, sparse_infill_density, layer_height)."
+        "Las claves de proposed_changes deben ser nombres reales de PrintConfig (ej: cool_plate_temp, hot_plate_temp, nozzle_temperature, filament_retraction_length, brim_width, brim_type, fan_min_speed, close_fan_the_first_x_layers, sparse_infill_density, layer_height).\n"
+        "Prestá especial atención a 'Valores que el usuario ya modificó respecto al preset original': si alguno está fuera de rango razonable para el material/impresora (demasiado alto, demasiado bajo, o inconsistente con el resto), señalalo explícitamente en diagnosis_text aunque el usuario no haya preguntado por eso."
     )
 
     prompt = (
@@ -167,6 +168,7 @@ def diagnose_cloud_gemini(user_message: str, context: dict, knowledge: str) -> d
         f"Impresora: {context.get('printer_preset', 'N/A')}\n"
         f"Filamento: {context.get('filament_preset', 'N/A')}\n"
         f"Perfil proceso: {context.get('process_preset', 'N/A')}\n"
+        f"Valores que el usuario ya modificó respecto al preset original: {json.dumps(context.get('config_diff_from_system', {}))}\n"
         f"Warnings de validación: {json.dumps(context.get('validation_warnings', []))}\n"
         f"Estadísticas: {json.dumps(context.get('print_statistics', {}))}\n"
     )

@@ -96,7 +96,11 @@ def diagnose(user_message: str, context: dict, knowledge: str) -> dict:
         "filament_retraction_length, filament_retraction_speed, travel_speed, brim_width, "
         "brim_type, fan_min_speed, fan_max_speed, close_fan_the_first_x_layers, "
         "sparse_infill_density, layer_height. No inventes nombres de claves distintos a esos "
-        "estilos; si no corresponde ningún ajuste concreto, dejá proposed_changes vacío ({})."
+        "estilos; si no corresponde ningún ajuste concreto, dejá proposed_changes vacío ({}).\n"
+        "Prestá especial atención a 'Valores que el usuario ya modificó respecto al preset "
+        "original': si alguno está fuera de rango razonable para el material/impresora "
+        "(demasiado alto, demasiado bajo, o inconsistente con el resto), señalalo "
+        "explícitamente en diagnosis_text aunque el usuario no haya preguntado por eso."
     )
 
     prompt = (
@@ -106,6 +110,8 @@ def diagnose(user_message: str, context: dict, knowledge: str) -> dict:
         f"Impresora: {context.get('printer_preset', 'N/A')}\n"
         f"Filamento: {context.get('filament_preset', 'N/A')}\n"
         f"Perfil proceso: {context.get('process_preset', 'N/A')}\n"
+        f"Valores que el usuario ya modificó respecto al preset original: "
+        f"{json.dumps(context.get('config_diff_from_system', {}))}\n"
         f"Warnings de validación: {json.dumps(context.get('validation_warnings', []))}\n"
         f"Estadísticas: {json.dumps(context.get('print_statistics', {}))}\n"
     )
