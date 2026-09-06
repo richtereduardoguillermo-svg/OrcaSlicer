@@ -126,11 +126,15 @@ def diagnose(user_message: str, context: dict, knowledge: str) -> dict:
 
     # Un reintento: la API a veces tiene hiccups transitorios de latencia/red
     # que no vale la pena mostrarle al usuario como "no se pudo diagnosticar".
+    # OJO: el cliente C++ (AICopilotPanel.cpp) corta la conexión a los 40s
+    # (timeout_max(40)) — 2 intentos deben sumar bastante menos que eso, o el
+    # C++ se rinde antes de que este reintento termine y el usuario ve un
+    # error de timeout aunque brain_service hubiera respondido poco después.
     last_error = None
     for attempt in (1, 2):
         try:
             logging.info(f"gemini_client: consultando {MODEL} (intento {attempt})...")
-            with urllib.request.urlopen(req, timeout=25) as resp:
+            with urllib.request.urlopen(req, timeout=15) as resp:
                 raw = json.loads(resp.read().decode("utf-8"))
             text = raw["candidates"][0]["content"]["parts"][0]["text"]
 
